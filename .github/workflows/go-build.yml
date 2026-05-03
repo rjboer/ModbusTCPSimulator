@@ -1,0 +1,54 @@
+name: Go Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Detect Go module
+        id: detect
+        shell: pwsh
+        run: |
+          if (Test-Path 'go.mod') {
+            "module_dir=." >> $env:GITHUB_OUTPUT
+            "found=true" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          if (Test-Path 'code/go.mod') {
+            "module_dir=code" >> $env:GITHUB_OUTPUT
+            "found=true" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          "module_dir=" >> $env:GITHUB_OUTPUT
+          "found=false" >> $env:GITHUB_OUTPUT
+
+      - name: No module found
+        if: steps.detect.outputs.found == 'false'
+        shell: pwsh
+        run: |
+          Write-Host 'No Go module found in repository root or ./code. Skipping build.'
+
+      - name: Build
+        if: steps.detect.outputs.found == 'true'
+        shell: pwsh
+        working-directory: ${{ steps.detect.outputs.module_dir }}
+        run: |
+          go version
+          go build ./...
