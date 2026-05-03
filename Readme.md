@@ -134,38 +134,59 @@ I invent and build machines, develop industrial software, and create tools that 
 
 
 
+
 ## Tracking Table
 
-Use this table as the top-level audit tracker. `Yes` means the item exists. `Partial` means the item exists but is incomplete, placeholder-based, or only covers part of the documented feature set. `No` means it is not implemented or not verified yet.
+Use this table as the top-level audit tracker. `Yes` means the item exists and is trusted for that column. `Partial` means the item exists but is incomplete, blocked, or not authoritative enough for full validation. `No` means it is not implemented or not verified yet.
 
-| Vendor | Config Present | Source Docs Present Locally | Main Register Map Backed by Local PDF/XLSX | Wider Parameter Map | Runtime Behavior in Go | Vendor-Specific Runtime Verified Against Docs | Port Verified From Docs | Missing Types | Missing Info |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ABB | Yes | Yes | Partial | No | Yes | No | No | Specific ABB drive-family model | Placeholder registers `16..50`; no verified drive-family parameter map; current config is FENA adapter profile only |
-| Danfoss | Yes | Yes | Partial | No | Yes | No | No | Full FC302 parameter model | Only `2810..2819` and `2910..2919` are mapped with confidence; wider parameter space not transcribed |
-| Delta | Yes | Yes | Yes | Partial | Yes | Partial | No | Wider MS300 parameter families | Strongest implementation; command and monitor areas are mapped, but not the full parameter space |
-| Invertek | Yes | Yes | Partial | No | Yes | No | No | Wider Optidrive parameter model | Only cyclic words `1..4` and `256..259` are mapped with confidence |
-| Omron | No | Yes | No | No | No | No | No | Entire Omron mock profile | No `*_c.json`; no extracted Modbus/TCP map; may need additional source material for the target drive family |
-| Schneider | Yes | Partial | Partial | Partial | Yes | No | No | Fuller ATV320 object/register model | Workbook-backed core addresses exist; official Modbus manuals are identified but not mirrored locally; several documented objects still missing |
-| Siemens | Yes | Yes | Partial | No | Yes | No | No | Fuller SINAMICS parameter model | Process data `40100..40119` and selected diagnostics are mapped; wider parameter space remains unmapped |
+| Vendor | Config Present | Local Official Docs | Official Docs Identified Online | Blocked / Not Downloadable | Main Register Map Backed by Trusted Local PDF/XLSX | Wider Parameter Map | Runtime Behavior in Go | Trusted For Network Validation | Missing Types | Missing Info |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ABB | Yes | Yes | Partial | No | Partial | No | Yes | Partial | Specific ABB drive-family model | Placeholder registers `16..50`; no verified drive-family parameter map; current config is FENA adapter profile only |
+| Danfoss | Yes | Yes | Partial | No | Partial | No | Yes | Partial | Full FC302 parameter model | Only `2810..2819` and `2910..2919` are mapped with confidence; wider parameter space not transcribed |
+| Delta | Yes | Yes | Yes | No | Yes | Partial | Yes | Partial | Wider MS300 parameter families | Strongest implementation; command and monitor areas are mapped, but not the full parameter space and no TCP default port/unit-ID evidence was found |
+| Invertek | Yes | Yes | Yes | Partial | Partial | No | Yes | Partial | Wider Optidrive parameter model | Only cyclic words `1..4` and `256..259` are mapped with confidence; no vendor-hosted `OPT-2-MODIP-IN` user guide was found |
+| Omron | Yes | Yes | Partial | No | Partial | No | No | Partial | Omron MX2 flexible-format profile | The Omron config is based on the option-board flexible-format mapping, but broader MX2 parameter coverage and runtime behavior are still not implemented |
+| Schneider | Yes | Partial | Yes | Yes | Partial | Partial | Yes | Partial | Fuller ATV320 object/register model | Workbook-backed core addresses exist; `NVE41308` and `NVE41313` are identified on official Schneider pages, but vendor-hosted scripted downloads were blocked |
+| Siemens | Yes | Yes | Yes | Yes | Partial | No | Yes | Partial | Fuller SINAMICS parameter model | Process data `40100..40119` and selected diagnostics are mapped; broader vendor-hosted support PDFs were identified but blocked |
 
 ## Feature Checklist
 
 | Feature | ABB | Danfoss | Delta | Invertek | Omron | Schneider | Siemens |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `*_c.json` exists | Yes | Yes | Yes | Yes | No | Yes | Yes |
+| `*_c.json` exists | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | Vendor folder audit `README.md` exists | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| Local manuals/workbooks available | Yes | Yes | Yes | Yes | Yes | Partial | Yes |
-| Main cyclic command/status map documented | Partial | Partial | Yes | Partial | No | Partial | Partial |
+| Local manuals/workbooks available | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Main cyclic command/status map documented | Partial | Partial | Yes | Partial | Partial | Partial | Partial |
 | Additional documented registers included | Partial | Partial | Yes | No | No | Partial | Partial |
 | Large placeholder spans still present | Yes | Yes | Yes | No | No | Yes | Yes |
 | Basic runtime behavior implemented | Yes | Yes | Yes | Yes | No | Yes | Yes |
 | Runtime behavior matches vendor-specific semantics | No | No | Partial | No | No | No | No |
 | Simulator port confirmed from docs | No | No | No | No | No | No | No |
 
+## Network Validation
+
+This table separates what is actually backed by the vendor documentation from what is just a simulator choice in the current JSON files.
+
+| Vendor | Protocol In Config | Protocol Backed By Docs | Listen Address In Config | Port In Config | Port Backed By Docs | Unit IDs In Config | Unit IDs Backed By Docs | Serial Framing Fields In Config | Serial Framing Backed By Docs | Network Evidence Outcome | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ABB | `modbus-tcp` | Yes | `127.0.0.1` | `1510` | No | `[1]` | No | `8 / none / 1` | N/A for Modbus TCP | Simulator default | ABB docs confirm FENA Modbus TCP support, but the localhost bind, chosen port, and unit ID are not tied to a documented ABB setting |
+| Danfoss | `modbus-tcp` | Yes | `127.0.0.1` | `1511` | No | `[255]` | Partial | `8 / none / 1` | N/A for Modbus TCP | Partial | The FC302 Modbus TCP application note supports the protocol; the simulator port is local, and the `Unit ID 255` value remains prior-audit evidence rather than a newly re-extracted proof from this pass |
+| Delta | `modbus-tcp` | Partial | `127.0.0.1` | `1505` | No | `[1]` | No | `8 / none / 1` | N/A for Modbus TCP | Partial | The local Delta docs back the Modbus register map and product communication capability, but no clean Modbus TCP default port or unit-ID statement was found |
+| Invertek | `modbus-tcp` | Yes | `127.0.0.1` | `1512` | No | `[1]` | No | `8 / none / 1` | N/A for Modbus TCP | Partial | The local quick-start and user guide identify a Modbus TCP interface, but the chosen port and unit ID are not verified from the documents |
+| Omron | `modbus-tcp` | Partial | `127.0.0.1` | `1515` | No | `[1]` | No | `8 / none / 1` | N/A for Modbus TCP | Partial | The Omron config follows the documented flexible-format Modbus mapping, but the network defaults remain simulator-only and no Omron-specific runtime behavior is implemented |
+| Schneider | `modbus-tcp` | Yes | `127.0.0.1` | `1513` | No | `[1]` | No | `8 / none / 1` | N/A for Modbus TCP | Partial | Official Schneider pages identify `NVE41308` and `NVE41313`, but vendor-hosted scripted downloads were blocked, so the config still uses simulator-local addressing and an unverified unit ID |
+| Siemens | `modbus-tcp` | Yes | `127.0.0.1` | `1514` | No | `[1]` | No | `8 / none / 1` | N/A for Modbus TCP | Partial | The SINAMICS app note supports the Modbus TCP protocol and register areas, but not the current simulator port or unit ID |
+
+## Runtime Framing
+
+- The Go server currently accepts only Modbus TCP MBAP frames with `Protocol Identifier = 0`.
+- This is enforced in `internal/modbus/server.go`, not in the vendor JSON files.
+- The JSON fields `data_bits`, `parity`, and `stop_bits` are metadata only in the current runtime and should not be read as active TCP transport settings.
+
 ## Audit Summary
 
 - `Delta` is the most complete folder and still has the strongest documentation-to-runtime alignment.
 - `ABB`, `Danfoss`, `Invertek`, `Schneider`, and `Siemens` all have configs and basic runtime behavior, but they are still partial implementations.
-- `Omron` has documentation only and remains unimplemented.
+- `Omron` now has a partial MX2 config based on the documented flexible-format mapping, but it still lacks vendor-specific runtime behavior and verified network defaults.
+- `Schneider` and `Siemens` still have official vendor documents identified online that could not be re-downloaded automatically because the vendor CDNs returned access-denied responses from this environment.
 - No current simulator `port` value should be treated as vendor-document-verified unless that evidence is added explicitly to the vendor audit notes.
-
