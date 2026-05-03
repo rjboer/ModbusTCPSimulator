@@ -75,7 +75,20 @@ During runtime, you can:
 4. Exit the simulator
 
 Example runtime menu:
+Step 1:
+```text
+Choose a server configuration:
+  1. ABB FENA Ethernet Adapter Drive Mock | frequency-drive | 127.0.0.1:1510
+  2. Danfoss VLT FC302 Drive Mock | frequency-drive | 127.0.0.1:1511
+  3. Delta MS300 Drive Mock | frequency-drive | 127.0.0.1:1505
+  4. Delta MS300 Drive Documentation Example | frequency-drive | 127.0.0.1:1503
+  5. Invertek Optidrive P2 Drive Mock | frequency-drive | 127.0.0.1:1512
+  6. Schneider Altivar ATV320 Drive Mock | frequency-drive | 127.0.0.1:1513
+  7. Siemens SINAMICS Drive Mock | frequency-drive | 127.0.0.1:1514
+Enter selection [1-7] or q to quit: 3
+```
 
+Step 2:
 ```text
 Server: Delta MS300 Drive Mock | frequency-drive | 127.0.0.1:1505
 
@@ -85,13 +98,19 @@ Server: Delta MS300 Drive Mock | frequency-drive | 127.0.0.1:1505
 4. Exit
 ```
 Example's of errors that take way more time to debug!
+One of the most time consuming errors is connected to unit id's.
+The device gives errors, but the connection is setup correctly. 
 
-```go
+
+```text
 2026/05/03 13:12:10.477335 rejected unit id 0 from 127.0.0.1:35233
 or
 2026/05/03 11:06:05.041363 request tx=0 unit=1 func=0x03 payload=20 00 00 0A
 2026/05/03 11:06:05.041363 read registers error: address range 8192..8201 outside block
 ```
+
+This is now very easy to debug
+
 
 
 
@@ -111,4 +130,4 @@ Please include the relevant Modbus documentation. The better the documentation, 
 
 Created by **Roelof Jan Boer**.
 
-I build machines, develop industrial software, and create tools that make automation work more practical. This simulator has already been invaluable in my own development workflow, and I hope it helps other engineers just as much.
+I invent and build machines, develop industrial software, and create tools that make automation work more practical. This simulator has already been invaluable in my own development workflow, and I hope it helps others just as much.
