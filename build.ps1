@@ -2,6 +2,8 @@ param(
     [ValidateSet("fynehmi", "mockserver", "all")]
     [string]$Target = "fynehmi",
     [string]$OutputDir = "bin",
+    [switch]$Bundle,
+    [string]$BundleDir = "dist\modbus-tcp-simulator-windows",
     [string]$CCPath = "",
     [string]$CXXPath = ""
 )
@@ -109,6 +111,23 @@ switch ($Target) {
     "all" {
         Invoke-GoBuild -Package "./cmd/fynehmi" -Output (Join-Path $resolvedOutputDir "fynehmi.exe")
         Invoke-GoBuild -Package "./cmd/mockserver" -Output (Join-Path $resolvedOutputDir "mockserver.exe")
+    }
+}
+
+if ($Bundle) {
+    $resolvedBundleDir = Join-Path (Get-Location) $BundleDir
+    New-Item -ItemType Directory -Force -Path $resolvedBundleDir | Out-Null
+
+    if ($Target -eq "fynehmi" -or $Target -eq "all") {
+        Copy-Item -LiteralPath (Join-Path $resolvedOutputDir "fynehmi.exe") -Destination $resolvedBundleDir -Force
+    }
+    if ($Target -eq "mockserver" -or $Target -eq "all") {
+        Copy-Item -LiteralPath (Join-Path $resolvedOutputDir "mockserver.exe") -Destination $resolvedBundleDir -Force
+    }
+
+    Copy-Item -Recurse -LiteralPath (Join-Path (Get-Location) "configs") -Destination (Join-Path $resolvedBundleDir "configs") -Force
+    if (Test-Path (Join-Path (Get-Location) "Readme.md")) {
+        Copy-Item -LiteralPath (Join-Path (Get-Location) "Readme.md") -Destination $resolvedBundleDir -Force
     }
 }
 

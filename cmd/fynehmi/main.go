@@ -19,11 +19,11 @@ import (
 )
 
 func main() {
-	projectRoot, err := app2.DetectProjectRoot()
+	appRoot, err := app2.DetectProjectRoot()
 	if err != nil {
 		panic(err)
 	}
-	configRoot := app2.ConfigRoot(projectRoot)
+	configRoot := app2.ConfigRoot(appRoot)
 
 	runtime := app2.NewRuntime(configRoot)
 	discovery, err := runtime.Discover()
@@ -391,7 +391,7 @@ The HMI is designed for engineering work: testing PLC communication, validating 
 		container.NewHBox(
 			statusLabel,
 			layout.NewSpacer(),
-			widget.NewLabel(fmt.Sprintf("Project root: %s", projectRoot)),
+			widget.NewLabel(fmt.Sprintf("App root: %s", appRoot)),
 			widget.NewLabel(fmt.Sprintf("Config root: %s", configRoot)),
 		),
 		nil,

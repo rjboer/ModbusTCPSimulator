@@ -28,7 +28,7 @@ func DetectProjectRoot() (string, error) {
 			continue
 		}
 		seen[candidate] = struct{}{}
-		if looksLikeProjectRoot(candidate) {
+		if looksLikeRuntimeRoot(candidate) {
 			return candidate, nil
 		}
 	}
@@ -44,20 +44,8 @@ func ConfigRoot(projectRoot string) string {
 	return filepath.Join(projectRoot, "configs")
 }
 
-func looksLikeProjectRoot(path string) bool {
-	if !isDir(filepath.Join(path, "configs")) {
-		return false
-	}
-	if !isDir(filepath.Join(path, "cmd")) {
-		return false
-	}
-	if !isDir(filepath.Join(path, "internal")) {
-		return false
-	}
-	if _, err := os.Stat(filepath.Join(path, "go.mod")); err != nil {
-		return false
-	}
-	return true
+func looksLikeRuntimeRoot(path string) bool {
+	return isDir(filepath.Join(path, "configs"))
 }
 
 func isDir(path string) bool {
