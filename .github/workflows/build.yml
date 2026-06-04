@@ -8,24 +8,46 @@ on:
   pull_request:
   workflow_dispatch:
 
-jobs:
-  windows-build:
-    runs-on: windows-latest
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-    defaults:
-      run:
-        shell: pwsh
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runs_on }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            runs_on: windows-2025
+            artifact_name: modbus-tcp-simulator-windows
+            fynehmi_name: fynehmi.exe
+            mockserver_name: mockserver.exe
+          - name: Linux
+            runs_on: ubuntu-24.04
+            artifact_name: modbus-tcp-simulator-linux
+            fynehmi_name: fynehmi
+            mockserver_name: mockserver
+          - name: macOS
+            runs_on: macos-15
+            artifact_name: modbus-tcp-simulator-macos
+            fynehmi_name: fynehmi
+            mockserver_name: mockserver
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version-file: ./go.mod
+          cache-dependency-path: ./go.sum
 
       - name: Setup MSYS2 MinGW
+        if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -33,19 +55,48 @@ jobs:
           install: >-
             mingw-w64-ucrt-x86_64-gcc
 
+      - name: Install Linux GUI build dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc \
+            pkg-config \
+            libgl1-mesa-dev \
+            xorg-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxi-dev \
+            libxxf86vm-dev \
+            libasound2-dev
+
       - name: Download Go modules
         run: go mod download
 
       - name: Run backend checks
         run: go test ./internal/app ./internal/modbus
 
-      - name: Build executables
+      - name: Build Windows executables
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: .\build.ps1 -Target all
+
+      - name: Build Unix executables
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          mkdir -p bin
+          go build -o "./bin/${{ matrix.fynehmi_name }}" ./cmd/fynehmi
+          go build -o "./bin/${{ matrix.mockserver_name }}" ./cmd/mockserver
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: modbus-tcp-simulator-windows
+          name: ${{ matrix.artifact_name }}
           path: |
-            bin/fynehmi.exe
-            bin/mockserver.exe
+            bin/${{ matrix.fynehmi_name }}
+            bin/${{ matrix.mockserver_name }}
