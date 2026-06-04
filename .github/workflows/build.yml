@@ -3,7 +3,7 @@ name: Build
 on:
   push:
     branches:
-      - main
+      - develop
       - master
     tags:
       - 'v*'
@@ -130,38 +130,3 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           path: dist/${{ matrix.bundle_name }}.zip
-
-  release:
-    name: Release
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-      actions: read
-
-    steps:
-      - name: Download packaged artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run download "${{ github.run_id }}" --dir release-artifacts
-
-      - name: Publish release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          shopt -s globstar nullglob
-          assets=(release-artifacts/**/*.zip)
-          if [ ${#assets[@]} -eq 0 ]; then
-            echo "No release archives found."
-            exit 1
-          fi
-
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
-              --generate-notes \
-              --title "$GITHUB_REF_NAME"
-          fi
