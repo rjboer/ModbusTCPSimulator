@@ -68,6 +68,22 @@ func (s *Server) TrafficSnapshot() TrafficSnapshot {
 	return s.traffic.snapshot(s.ActiveClients(), time.Now())
 }
 
+func (s *Server) SetCoil(address uint16, value bool) error {
+	return s.store.WriteSingleCoil(address, value)
+}
+
+func (s *Server) SetDiscreteInput(address uint16, value bool) error {
+	return s.store.SetDiscreteInput(address, value)
+}
+
+func (s *Server) SetHoldingRegister(address uint16, value uint16) error {
+	return s.store.WriteSingleRegister(address, value)
+}
+
+func (s *Server) SetInputRegister(address uint16, value uint16) error {
+	return s.store.SetInputRegister(address, value)
+}
+
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	address := fmt.Sprintf("%s:%d", s.cfg.ListenAddress, s.cfg.Port)
 	listener, err := net.Listen("tcp", address)

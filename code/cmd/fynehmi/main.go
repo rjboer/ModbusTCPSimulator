@@ -72,6 +72,8 @@ func main() {
 	startButton := widget.NewButton("Start Server", nil)
 	stopButton := widget.NewButton("Stop Server", nil)
 	registerRows := []registerRow{}
+	var refreshStatus func(string)
+	var refreshTelemetry func()
 
 	registerTable := widget.NewTable(
 		func() (int, int) {
@@ -111,6 +113,82 @@ func main() {
 	registerTable.SetColumnWidth(2, 90)
 	registerTable.SetColumnWidth(3, 120)
 	registerTable.SetColumnWidth(4, 420)
+	registerTable.OnSelected = func(id widget.TableCellID) {
+		if id.Row == 0 || id.Col != 3 || id.Row-1 >= len(registerRows) {
+			return
+		}
+
+		row := registerRows[id.Row-1]
+		if row.IsBool {
+			nextValue := row.Value != "true"
+			if err := runtime.SetBoolValue(row.Block, row.AddressNum, nextValue); err != nil {
+				dialog.ShowError(err, window)
+				registerTable.Unselect(id)
+				return
+			}
+			refreshTelemetry()
+			refreshStatus(fmt.Sprintf("%s %s set to %t", row.Block, row.Address, nextValue))
+			registerTable.Unselect(id)
+			return
+		}
+
+		registerTable.Unselect(id)
+
+		entry := widget.NewEntry()
+		entry.SetText(strings.Fields(row.Value)[0])
+		var editor *dialog.FormDialog
+		applyValue := func() {
+			value, err := strconv.ParseUint(strings.TrimSpace(entry.Text), 0, 16)
+			if err != nil {
+				dialog.ShowError(fmt.Errorf("invalid value %q", entry.Text), window)
+				return
+			}
+			if err := runtime.SetRegisterValue(row.Block, row.AddressNum, uint16(value)); err != nil {
+				dialog.ShowError(err, window)
+				return
+			}
+			if editor != nil {
+				editor.Hide()
+			}
+			refreshTelemetry()
+			refreshStatus(fmt.Sprintf("%s %s set to %d", row.Block, row.Address, value))
+		}
+
+		entry.OnSubmitted = func(string) {
+			applyValue()
+		}
+
+		previousKeyHandler := window.Canvas().OnTypedKey()
+		editor = dialog.NewForm(
+			fmt.Sprintf("Edit %s %s", row.Block, row.Address),
+			"Apply",
+			"Cancel",
+			[]*widget.FormItem{
+				widget.NewFormItem("Value", entry),
+			},
+			func(confirmed bool) {
+				if !confirmed {
+					return
+				}
+				applyValue()
+			},
+			window,
+		)
+		editor.SetOnClosed(func() {
+			window.Canvas().SetOnTypedKey(previousKeyHandler)
+		})
+		window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
+			if ev.Name == fyne.KeyEscape {
+				editor.Hide()
+				return
+			}
+			if previousKeyHandler != nil {
+				previousKeyHandler(ev)
+			}
+		})
+		editor.Show()
+		window.Canvas().Focus(entry)
+	}
 
 	updateSelectedConfig := func() {
 		if len(validConfigs) == 0 {
@@ -128,7 +206,7 @@ func main() {
 		configSummary.SetText(formatConfigSummary(selected))
 	}
 
-	refreshStatus := func(message string) {
+	refreshStatus = func(message string) {
 		statusLabel.SetText(message)
 	}
 
@@ -150,7 +228,7 @@ func main() {
 		stopButton.Refresh()
 	}
 
-	refreshTelemetry := func() {
+	refreshTelemetry = func() {
 		running, runtimeErr := runtime.SyncState()
 		if runtimeErr != nil {
 			refreshStatus(fmt.Sprintf("Server error: %v", runtimeErr))
@@ -364,10 +442,12 @@ func buildConfigRows(items []modbus.DiscoveredConfig) []string {
 
 type registerRow struct {
 	Block       string
+	AddressNum  uint16
 	Address     string
 	Hex         string
 	Value       string
 	Description string
+	IsBool      bool
 }
 
 func registerTableHeader(col int) string {
@@ -489,10 +569,12 @@ func appendBoolRows(rows []registerRow, blockName string, block modbus.BoolBlock
 		address := block.StartAddress + uint16(i)
 		rows = append(rows, registerRow{
 			Block:       blockName,
+			AddressNum:  address,
 			Address:     strconv.Itoa(int(address)),
 			Hex:         fmt.Sprintf("0x%04X", address),
 			Value:       strconv.FormatBool(value),
 			Description: descriptionAt(block.Descriptions, i),
+			IsBool:      true,
 		})
 	}
 	return rows
@@ -503,6 +585,7 @@ func appendRegisterRows(rows []registerRow, blockName string, block modbus.Regis
 		address := block.StartAddress + uint16(i)
 		rows = append(rows, registerRow{
 			Block:       blockName,
+			AddressNum:  address,
 			Address:     strconv.Itoa(int(address)),
 			Hex:         fmt.Sprintf("0x%04X", address),
 			Value:       fmt.Sprintf("%d (0x%04X)", value, value),

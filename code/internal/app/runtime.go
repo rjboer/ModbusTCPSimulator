@@ -217,6 +217,72 @@ func (r *Runtime) SnapshotData() (modbus.Config, modbus.DataStoreSnapshot) {
 	return cfg, store.Snapshot()
 }
 
+func (r *Runtime) SetBoolValue(block string, address uint16, value bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.syncServerLocked()
+
+	switch block {
+	case "Coils":
+		if err := setConfigBoolBlockValue(&r.selectedCfg.DataModel.Coils, address, value); err != nil {
+			return err
+		}
+		if r.server != nil {
+			if err := r.server.SetCoil(address, value); err != nil {
+				return err
+			}
+		}
+	case "Discrete Inputs":
+		if err := setConfigBoolBlockValue(&r.selectedCfg.DataModel.DiscreteInputs, address, value); err != nil {
+			return err
+		}
+		if r.server != nil {
+			if err := r.server.SetDiscreteInput(address, value); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("block %q does not support boolean editing", block)
+	}
+
+	r.logger.Printf("operator set %s address=%d value=%t", block, address, value)
+	return nil
+}
+
+func (r *Runtime) SetRegisterValue(block string, address uint16, value uint16) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.syncServerLocked()
+
+	switch block {
+	case "Holding Registers":
+		if err := setConfigRegisterBlockValue(&r.selectedCfg.DataModel.HoldingRegister, address, value); err != nil {
+			return err
+		}
+		if r.server != nil {
+			if err := r.server.SetHoldingRegister(address, value); err != nil {
+				return err
+			}
+		}
+	case "Input Registers":
+		if err := setConfigRegisterBlockValue(&r.selectedCfg.DataModel.InputRegisters, address, value); err != nil {
+			return err
+		}
+		if r.server != nil {
+			if err := r.server.SetInputRegister(address, value); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("block %q does not support register editing", block)
+	}
+
+	r.logger.Printf("operator set %s address=%d value=%d (0x%04X)", block, address, value, value)
+	return nil
+}
+
 func (r *Runtime) syncServerLocked() {
 	if r.done == nil {
 		return
@@ -233,4 +299,28 @@ func (r *Runtime) syncServerLocked() {
 		r.done = nil
 	default:
 	}
+}
+
+func setConfigBoolBlockValue(block *modbus.BoolBlock, address uint16, value bool) error {
+	if address < block.StartAddress {
+		return fmt.Errorf("address %d before block start %d", address, block.StartAddress)
+	}
+	index := int(address - block.StartAddress)
+	if index < 0 || index >= len(block.Values) {
+		return fmt.Errorf("address %d outside block", address)
+	}
+	block.Values[index] = value
+	return nil
+}
+
+func setConfigRegisterBlockValue(block *modbus.RegisterBlock, address uint16, value uint16) error {
+	if address < block.StartAddress {
+		return fmt.Errorf("address %d before block start %d", address, block.StartAddress)
+	}
+	index := int(address - block.StartAddress)
+	if index < 0 || index >= len(block.Values) {
+		return fmt.Errorf("address %d outside block", address)
+	}
+	block.Values[index] = value
+	return nil
 }

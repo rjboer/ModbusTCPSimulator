@@ -127,6 +127,18 @@ func (ds *DataStore) WriteMultipleRegisters(address uint16, values []uint16) err
 	return nil
 }
 
+func (ds *DataStore) SetDiscreteInput(address uint16, value bool) error {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	return writeSingleBool(&ds.discreteInputs, address, value)
+}
+
+func (ds *DataStore) SetInputRegister(address uint16, value uint16) error {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	return writeSingleRegister(&ds.input, address, value)
+}
+
 func (ds *DataStore) syncDerivedStateLocked() {
 	model := strings.TrimSpace(ds.runtime.Behavior.Model)
 	if model == "" && strings.EqualFold(ds.deviceProfile, "delta-ms300") {
