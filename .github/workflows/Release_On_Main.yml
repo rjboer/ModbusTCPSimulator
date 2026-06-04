@@ -1,0 +1,190 @@
+name: Release On Main
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runs_on }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            runs_on: windows-2025
+            artifact_name: modbus-tcp-simulator-windows
+            bundle_name: modbus-tcp-simulator-windows
+            fynehmi_name: fynehmi.exe
+            mockserver_name: mockserver.exe
+          - name: Linux
+            runs_on: ubuntu-24.04
+            artifact_name: modbus-tcp-simulator-linux
+            bundle_name: modbus-tcp-simulator-linux
+            fynehmi_name: fynehmi
+            mockserver_name: mockserver
+          - name: macOS
+            runs_on: macos-15
+            artifact_name: modbus-tcp-simulator-macos
+            bundle_name: modbus-tcp-simulator-macos
+            fynehmi_name: fynehmi
+            mockserver_name: mockserver
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ./go.mod
+          cache-dependency-path: ./go.sum
+
+      - name: Setup MSYS2 MinGW
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+
+      - name: Install Linux GUI build dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc \
+            pkg-config \
+            libgl1-mesa-dev \
+            xorg-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxi-dev \
+            libxxf86vm-dev \
+            libasound2-dev \
+            zip
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Run backend checks
+        run: go test ./internal/app ./internal/modbus
+
+      - name: Build Windows executables
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\build.ps1 -Target all
+
+      - name: Build Unix executables
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          mkdir -p bin
+          go build -o "./bin/${{ matrix.fynehmi_name }}" ./cmd/fynehmi
+          go build -o "./bin/${{ matrix.mockserver_name }}" ./cmd/mockserver
+
+      - name: Package Windows bundle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bundleRoot = Join-Path "dist" "${{ matrix.bundle_name }}"
+          New-Item -ItemType Directory -Force -Path $bundleRoot | Out-Null
+          Copy-Item -LiteralPath ".\bin\${{ matrix.fynehmi_name }}" -Destination $bundleRoot -Force
+          Copy-Item -LiteralPath ".\bin\${{ matrix.mockserver_name }}" -Destination $bundleRoot -Force
+          Copy-Item -Recurse -LiteralPath ".\configs" -Destination (Join-Path $bundleRoot "configs") -Force
+          Copy-Item -LiteralPath ".\Readme.md" -Destination $bundleRoot -Force
+          Compress-Archive -Path $bundleRoot -DestinationPath (Join-Path "dist" "${{ matrix.bundle_name }}.zip") -Force
+
+      - name: Package Unix bundle
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          bundle_root="dist/${{ matrix.bundle_name }}"
+          mkdir -p "$bundle_root"
+          cp "./bin/${{ matrix.fynehmi_name }}" "$bundle_root/"
+          cp "./bin/${{ matrix.mockserver_name }}" "$bundle_root/"
+          cp -R "./configs" "$bundle_root/configs"
+          cp "./Readme.md" "$bundle_root/"
+          (cd dist && zip -r "${{ matrix.bundle_name }}.zip" "${{ matrix.bundle_name }}")
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/${{ matrix.bundle_name }}.zip
+
+  release:
+    name: Tag And Release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+
+    outputs:
+      tag_name: ${{ steps.tag.outputs.tag_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine next version tag
+        id: tag
+        shell: bash
+        run: |
+          git fetch --tags --force
+          latest="$(git tag -l 'v*' --sort=-version:refname | head -n 1)"
+          if [[ -z "$latest" ]]; then
+            next="v0.1.0"
+          elif [[ "$latest" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+            patch="${BASH_REMATCH[3]}"
+            next="v${major}.${minor}.$((patch + 1))"
+          else
+            echo "Latest tag '$latest' is not semver-like (vX.Y.Z)."
+            exit 1
+          fi
+          echo "tag_name=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Download packaged artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "${{ github.run_id }}" --dir release-artifacts
+
+      - name: Create tag and publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.tag.outputs.tag_name }}
+        run: |
+          shopt -s globstar nullglob
+          assets=(release-artifacts/**/*.zip)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "No release archives found."
+            exit 1
+          fi
+
+          gh release create "$TAG_NAME" "${assets[@]}" \
+            --target "$GITHUB_SHA" \
+            --generate-notes \
+            --title "$TAG_NAME"
