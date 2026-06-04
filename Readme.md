@@ -52,7 +52,19 @@ These are intended for simulation, testing, and development workflows. I do not 
 
 The simulator uses JSON configuration files to define device behavior and register maps.
 
-The application searches for config files in its own directory tree, making it easy to keep multiple device definitions together in one place. This makes it straightforward to build a test bench with several simulated drives.
+The application searches for config files under the repository `configs/` directory, making it easy to keep multiple device definitions together in one place. This makes it straightforward to build a test bench with several simulated drives.
+
+## Project Layout
+
+The repository now follows a more conventional Go project layout:
+
+- `cmd/fynehmi` contains the Fyne HMI entrypoint
+- `cmd/mockserver` contains the CLI simulator entrypoint
+- `internal/modbus` contains the Modbus runtime and simulator logic
+- `internal/app` contains shared application/runtime glue for the HMI
+- `configs/` contains device JSON configurations and related notes
+- `documentation/` contains requirements and project documentation
+- `build.ps1` builds Windows binaries into `bin/`
 
 ## Typical Use Cases
 
@@ -66,6 +78,24 @@ The application searches for config files in its own directory tree, making it e
 ## Running The Simulator
 
 Start the application and choose the device you want to simulate from the startup menu.
+
+Build from the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Target all
+```
+
+Run the GUI:
+
+```powershell
+.\bin\fynehmi.exe
+```
+
+Run the CLI:
+
+```powershell
+.\bin\mockserver.exe
+```
 
 During runtime, you can:
 

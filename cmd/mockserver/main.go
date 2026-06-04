@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 
+	app2 "modbustcpipserver/internal/app"
 	"modbustcpipserver/internal/modbus"
 )
 
@@ -80,24 +81,25 @@ func resolveConfig(configPath string, logger *log.Logger) (modbus.Config, string
 		return updatedCfg, path, nil
 	}
 
-	root, err := os.Getwd()
+	projectRoot, err := app2.DetectProjectRoot()
 	if err != nil {
 		return modbus.Config{}, "", fmt.Errorf("determine scan root: %w", err)
 	}
+	configRoot := app2.ConfigRoot(projectRoot)
 
-	discovery, err := modbus.DiscoverConfigs(root)
+	discovery, err := modbus.DiscoverConfigs(configRoot)
 	if err != nil {
-		return modbus.Config{}, "", fmt.Errorf("scan configs in %s: %w", root, err)
+		return modbus.Config{}, "", fmt.Errorf("scan configs in %s: %w", configRoot, err)
 	}
 
 	if len(discovery.Valid) == 0 {
-		defaultPath := filepath.Join(root, "config.default_c.json")
+		defaultPath := filepath.Join(configRoot, "config.default_c.json")
 		cfg, renderedConfig, created, err := modbus.LoadOrCreateConfig(defaultPath)
 		if err != nil {
 			return modbus.Config{}, "", err
 		}
 		if created {
-			logger.Printf("no valid JSON server configs found under %s", root)
+			logger.Printf("no valid JSON server configs found under %s", configRoot)
 			logger.Printf("created default profile config at %q", defaultPath)
 			logger.Printf("generated config:\n%s", renderedConfig)
 		}

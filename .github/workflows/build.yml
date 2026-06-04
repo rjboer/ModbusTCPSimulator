@@ -1,0 +1,51 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup MSYS2 MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Run backend checks
+        run: go test ./internal/app ./internal/modbus
+
+      - name: Build executables
+        run: .\build.ps1 -Target all
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: modbus-tcp-simulator-windows
+          path: |
+            bin/fynehmi.exe
+            bin/mockserver.exe
