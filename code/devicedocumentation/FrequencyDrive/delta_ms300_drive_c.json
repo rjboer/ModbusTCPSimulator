@@ -1,0 +1,108 @@
+{
+  "name": "Delta MS300 Drive Documentation Example",
+  "device_type": "frequency-drive",
+  "device_profile": "delta-ms300",
+  "listen_address": "127.0.0.1",
+  "port": 502,
+  "unit_ids": [
+    1
+  ],
+  "log_level": "info",
+  "network": {
+    "protocol": "modbus-tcp",
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1
+  },
+  "connection": {
+    "max_clients": 8,
+    "idle_timeout_ms": 30000
+  },
+  "documentation": {
+    "trust": "partial",
+    "local_sources": [
+      "Delta/Delta-MS-300-Series-Users-Manual.pdf",
+      "Delta/Delta-VFD-MS300-User-Manual.pdf",
+      "Delta/DELTA_IA-MDS_VFD-MS300_UM_EN_20170306.pdf",
+      "Delta/DELTA_IA-MDS_MS300_C_EN_20210714.pdf",
+      "Delta/DELTA_IA-MDS_VFD_EtherNetIP_AM_EN_20250219.pdf"
+    ],
+    "network_validation": {
+      "protocol": "partial",
+      "listen_address": "simulator-default",
+      "port": "simulator-default",
+      "unit_ids": "unverified",
+      "protocol_id": "runtime-enforced-zero",
+      "serial_framing": "metadata-only"
+    },
+    "notes": [
+      "This is the top-level Delta example config.",
+      "The current listen address and unit ID are simulator defaults rather than vendor-documented network defaults.",
+      "The current port falls back to Modbus TCP default 502 because no Delta-specific port override was verified."
+    ]
+  },
+  "data_model": {
+    "coils": {
+      "start_address": 0,
+      "descriptions": [
+        "Reserved coil 0",
+        "Reserved coil 1",
+        "Reserved coil 2",
+        "Reserved coil 3"
+      ],
+      "values": [
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    "discrete_inputs": {
+      "start_address": 0,
+      "descriptions": [
+        "Reserved discrete input 0",
+        "Reserved discrete input 1",
+        "Reserved discrete input 2",
+        "Reserved discrete input 3"
+      ],
+      "values": [
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    "holding_registers": {
+      "start_address": 8192,
+      "descriptions": [
+        "Operation command",
+        "Frequency command in 0.01 Hz units",
+        "Fault and control command source"
+      ],
+      "values": [
+        0,
+        5000,
+        0
+      ]
+    },
+    "input_registers": {
+      "start_address": 8448,
+      "descriptions": [
+        "Fault status",
+        "Drive operation status",
+        "Frequency command readback in 0.01 Hz units",
+        "Output frequency in 0.01 Hz units",
+        "Output current",
+        "DC bus voltage"
+      ],
+      "values": [
+        0,
+        1280,
+        5000,
+        0,
+        0,
+        3250
+      ]
+    }
+  }
+}

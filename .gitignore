@@ -1,0 +1,6 @@
+*.txt
+*.exe
+documentation/Requirements.md
+*.pdf
+*.ps1
+code/devicedocumentation/ConfigGuidelines.md

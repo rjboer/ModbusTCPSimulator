@@ -1,0 +1,151 @@
+{
+  "name": "Omron MX2 Drive Mock",
+  "device_type": "frequency-drive",
+  "device_profile": "omron-mx2",
+  "listen_address": "127.0.0.1",
+  "port": 502,
+  "unit_ids": [
+    1
+  ],
+  "log_level": "info",
+  "network": {
+    "protocol": "modbus-tcp",
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1
+  },
+  "connection": {
+    "max_clients": 8,
+    "idle_timeout_ms": 30000
+  },
+  "documentation": {
+    "trust": "partial",
+    "local_sources": [
+      "i666_mx2-ev2_users_manual_en.pdf",
+      "i361_mx2_ethernet_ip_option_board_users_manual_en.pdf",
+      "i114e_mx2_rx_componet_option_board_users_manual_en.pdf"
+    ],
+    "official_references": [
+      "https://assets.omron.eu/downloads/latest/manual/en/i666_mx2-ev2_users_manual_en.pdf?v=0",
+      "https://assets.omron.eu/downloads/latest/manual/en/i361_mx2_ethernet_ip_option_board_users_manual_en.pdf?v=4",
+      "https://assets.omron.eu/downloads/latest/manual/en/i114e_mx2_rx_componet_option_board_users_manual_en.pdf"
+    ],
+    "network_validation": {
+      "protocol": "partial",
+      "listen_address": "simulator-default",
+      "port": "simulator-default",
+      "unit_ids": "unverified",
+      "protocol_id": "runtime-enforced-zero",
+      "serial_framing": "metadata-only"
+    },
+    "notes": [
+      "This config follows the MX2 flexible-format mapping described in the local Omron option-board manuals.",
+      "The mapped exchange uses Modbus coils 0000h through 000Fh for control, coils 0010h through 001Fh for status, registers 0001h and 0002h for frequency reference, and registers 1001h and 1002h for output-frequency monitoring.",
+      "The configured listen address and unit ID are simulator choices rather than Omron-documented defaults.",
+      "The configured port falls back to Modbus TCP default 502 because no Omron-specific port override was verified.",
+      "No Omron-specific runtime behavior is implemented in Go yet."
+    ]
+  },
+  "data_model": {
+    "coils": {
+      "start_address": 0,
+      "values": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "descriptions": [
+        "Control coil 0000h: Opr operation command",
+        "Control coil 0001h: Dir rotation direction command",
+        "Control coil 0002h: EXT external trip",
+        "Control coil 0003h: RS trip reset",
+        "Control coil 0004h: In1 intelligent input terminal 1",
+        "Control coil 0005h: In2 intelligent input terminal 2",
+        "Control coil 0006h: In3 intelligent input terminal 3",
+        "Control coil 0007h: In4 intelligent input terminal 4",
+        "Control coil 0008h: In5 intelligent input terminal 5",
+        "Control coil 0009h: In6 intelligent input terminal 6",
+        "Control coil 000Ah: In7 intelligent input terminal 7",
+        "Control coil 000Bh: Reserved control coil",
+        "Control coil 000Ch: Reserved control coil",
+        "Control coil 000Dh: Reserved control coil",
+        "Control coil 000Eh: Reserved control coil",
+        "Control coil 000Fh: Reserved control coil"
+      ]
+    },
+    "discrete_inputs": {
+      "start_address": 16,
+      "values": [
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "descriptions": [
+        "Status coil 0010h: Dir direction status",
+        "Status coil 0011h: Rdy ready",
+        "Status coil 0012h: Reserved status coil",
+        "Status coil 0013h: RUN running",
+        "Status coil 0014h: FA1 fault status 1",
+        "Status coil 0015h: FA2 fault status 2",
+        "Status coil 0016h: OL overload",
+        "Status coil 0017h: OD overdrive or trip indication",
+        "Status coil 0018h: AL alarm",
+        "Status coil 0019h: FA3 fault status 3",
+        "Status coil 001Ah: OTQ overtorque",
+        "Status coil 001Bh: Reserved status coil",
+        "Status coil 001Ch: UV undervoltage",
+        "Status coil 001Dh: TRQ torque status",
+        "Status coil 001Eh: RNT run status",
+        "Status coil 001Fh: ONT on status"
+      ]
+    },
+    "holding_registers": {
+      "start_address": 1,
+      "values": [
+        0,
+        1000
+      ],
+      "descriptions": [
+        "Modbus register 0001h: Frequency reference mapped output word 2 for MX2 flexible format",
+        "Modbus register 0002h: Frequency reference mapped output word 3 for MX2 flexible format"
+      ]
+    },
+    "input_registers": {
+      "start_address": 4097,
+      "values": [
+        0,
+        1000
+      ],
+      "descriptions": [
+        "Modbus register 1001h: Output frequency monitor d001 mapped input word 3",
+        "Modbus register 1002h: Output frequency monitor d001 mapped input word 4"
+      ]
+    }
+  }
+}

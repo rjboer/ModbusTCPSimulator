@@ -1,0 +1,108 @@
+{
+  "name": "Invertek Optidrive P2 Drive Mock",
+  "device_type": "frequency-drive",
+  "device_profile": "invertek-optidrive-p2",
+  "listen_address": "127.0.0.1",
+  "port": 502,
+  "unit_ids": [
+    1
+  ],
+  "log_level": "info",
+  "network": {
+    "protocol": "modbus-tcp",
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1
+  },
+  "connection": {
+    "max_clients": 8,
+    "idle_timeout_ms": 30000
+  },
+  "documentation": {
+    "trust": "partial",
+    "local_sources": [
+      "Optidrive_P2_Advanced_User_Guide_Rev_2.00.pdf",
+      "Quick_Start_Guide_Modbus_TCP_Interface.pdf",
+      "414769.pdf"
+    ],
+    "official_references": [
+      "OPT-2-MODIP-IN",
+      "OPT-3-MTPEG-IN"
+    ],
+    "network_validation": {
+      "protocol": "documented",
+      "listen_address": "simulator-default",
+      "port": "simulator-default",
+      "unit_ids": "unverified",
+      "protocol_id": "runtime-enforced-zero",
+      "serial_framing": "metadata-only"
+    },
+    "notes": [
+      "The cyclic Modbus TCP exchange is backed by the local Invertek documents.",
+      "No vendor-hosted OPT-2-MODIP-IN user guide was recovered during the audit.",
+      "The configured listen address and unit ID are simulator choices rather than Invertek-documented defaults.",
+      "The configured port falls back to Modbus TCP default 502 because no Invertek-specific port override was verified."
+    ]
+  },
+  "runtime": {
+    "behavior": {
+      "model": "invertek-optidrive-p2-basic",
+      "register_map": {
+        "control_word": 1,
+        "frequency_setpoint": 2,
+        "torque_setpoint": 3,
+        "status_word": 256,
+        "output_frequency": 257,
+        "output_current": 258,
+        "output_torque": 259
+      },
+      "constants": {
+        "ready_status_word": 9,
+        "running_status_word": 11,
+        "minimum_output_current": 100
+      }
+    }
+  },
+  "data_model": {
+    "coils": {
+      "start_address": 0,
+      "values": [],
+      "descriptions": []
+    },
+    "discrete_inputs": {
+      "start_address": 0,
+      "values": [],
+      "descriptions": []
+    },
+    "holding_registers": {
+      "start_address": 1,
+      "values": [
+        0,
+        0,
+        0,
+        3000
+      ],
+      "descriptions": [
+        "Drive control word, Modbus TCP register 1",
+        "Frequency setpoint, Modbus TCP register 2, scaling 500 = 50.0 Hz",
+        "Torque setpoint or user-selected value, Modbus TCP register 3, scaling 1000 = 100.0%",
+        "Fieldbus ramps or user-selected value, Modbus TCP register 4, scaling 3000 = 30.0 s"
+      ]
+    },
+    "input_registers": {
+      "start_address": 256,
+      "values": [
+        9,
+        0,
+        0,
+        0
+      ],
+      "descriptions": [
+        "Drive status word, Modbus TCP register 256",
+        "Output frequency, Modbus TCP register 257, scaling 500 = 50.0 Hz",
+        "Output current or user-selected value, Modbus TCP register 258, scaling 100 = 10.0 A",
+        "Output torque or user-selected value, Modbus TCP register 259, scaling 1000 = 100.0%"
+      ]
+    }
+  }
+}
