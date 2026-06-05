@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"image/color"
+	"io"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -9,9 +12,12 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	app2 "modbustcpipserver/internal/app"
@@ -19,6 +25,11 @@ import (
 )
 
 func main() {
+	const (
+		preferenceLaunchCount         = "launch_count"
+		preferenceLinkedInPromptCount = "linkedin_prompt_count"
+	)
+
 	appRoot, err := app2.DetectProjectRoot()
 	if err != nil {
 		panic(err)
@@ -34,6 +45,10 @@ func main() {
 	ui := app.NewWithID("rjboer.modbus-tcp-simulator.hmi")
 	window := ui.NewWindow("Modbus TCP Simulator HMI")
 	window.Resize(fyne.NewSize(1400, 900))
+
+	prefs := ui.Preferences()
+	launchCount := prefs.IntWithFallback(preferenceLaunchCount, 0) + 1
+	prefs.SetInt(preferenceLaunchCount, launchCount)
 
 	done := make(chan struct{})
 	var stopRefreshOnce sync.Once
@@ -74,51 +89,57 @@ func main() {
 	registerRows := []registerRow{}
 	var refreshStatus func(string)
 	var refreshTelemetry func()
+	const (
+		registerBlockColWidth       float32 = 140
+		registerAddressColWidth     float32 = 90
+		registerHexColWidth         float32 = 90
+		registerValueColWidth       float32 = 120
+		registerDescriptionColWidth float32 = 420
+	)
 
 	registerTable := widget.NewTable(
 		func() (int, int) {
-			return len(registerRows) + 1, 5
+			return len(registerRows), 5
 		},
 		func() fyne.CanvasObject {
-			return widget.NewLabel("")
+			text := canvas.NewText("", theme.Color(theme.ColorNameForeground))
+			text.TextSize = theme.TextSize()
+			return text
 		},
 		func(id widget.TableCellID, obj fyne.CanvasObject) {
-			label := obj.(*widget.Label)
-			label.Wrapping = fyne.TextWrapOff
-
-			if id.Row == 0 {
-				label.TextStyle = fyne.TextStyle{Bold: true}
-				label.SetText(registerTableHeader(id.Col))
-				return
-			}
-
-			label.TextStyle = fyne.TextStyle{}
-			row := registerRows[id.Row-1]
+			text := obj.(*canvas.Text)
+			text.Alignment = fyne.TextAlignLeading
+			text.TextSize = theme.TextSize()
+			text.Color = theme.Color(theme.ColorNameForeground)
+			text.TextStyle = fyne.TextStyle{}
+			row := registerRows[id.Row]
 			switch id.Col {
 			case 0:
-				label.SetText(row.Block)
+				text.Text = row.Block
 			case 1:
-				label.SetText(row.Address)
+				text.Text = row.Address
 			case 2:
-				label.SetText(row.Hex)
+				text.Text = row.Hex
 			case 3:
-				label.SetText(row.Value)
+				text.Text = row.Value
+				text.Color = registerValueColor(row)
 			case 4:
-				label.SetText(row.Description)
+				text.Text = row.Description
 			}
+			text.Refresh()
 		},
 	)
-	registerTable.SetColumnWidth(0, 140)
-	registerTable.SetColumnWidth(1, 90)
-	registerTable.SetColumnWidth(2, 90)
-	registerTable.SetColumnWidth(3, 120)
-	registerTable.SetColumnWidth(4, 420)
+	registerTable.SetColumnWidth(0, registerBlockColWidth)
+	registerTable.SetColumnWidth(1, registerAddressColWidth)
+	registerTable.SetColumnWidth(2, registerHexColWidth)
+	registerTable.SetColumnWidth(3, registerValueColWidth)
+	registerTable.SetColumnWidth(4, registerDescriptionColWidth)
 	registerTable.OnSelected = func(id widget.TableCellID) {
-		if id.Row == 0 || id.Col != 3 || id.Row-1 >= len(registerRows) {
+		if id.Col != 3 || id.Row >= len(registerRows) {
 			return
 		}
 
-		row := registerRows[id.Row-1]
+		row := registerRows[id.Row]
 		if row.IsBool {
 			nextValue := row.Value != "true"
 			if err := runtime.SetBoolValue(row.Block, row.AddressNum, nextValue); err != nil {
@@ -291,12 +312,26 @@ func main() {
 	}
 
 	exportButton := widget.NewButton("Export Log", func() {
-		path := modbus.DefaultLogExportPath()
-		if err := runtime.ExportLogs(path); err != nil {
-			dialog.ShowError(err, window)
-			return
-		}
-		refreshStatus(fmt.Sprintf("Log exported to %s", path))
+		saveDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+			if err != nil {
+				dialog.ShowError(err, window)
+				return
+			}
+			if writer == nil {
+				return
+			}
+			defer writer.Close()
+
+			lines, _ := runtime.LogsSince(0)
+			if _, err := io.WriteString(writer, strings.Join(lines, "\n")); err != nil {
+				dialog.ShowError(err, window)
+				return
+			}
+			refreshStatus(fmt.Sprintf("Log exported to %s", writer.URI().Path()))
+		}, window)
+		saveDialog.SetFileName("modbus-simulator.log")
+		saveDialog.SetFilter(storage.NewExtensionFileFilter([]string{".log", ".txt"}))
+		saveDialog.Show()
 	})
 
 	leftPane := container.NewPadded(container.NewBorder(
@@ -318,32 +353,46 @@ func main() {
 		container.NewScroll(configSummary),
 	)
 
+	trafficSplit := container.NewVSplit(container.NewScroll(trafficSummary), connectionList)
+	trafficSplit.Offset = 0.58
+
 	trafficCard := widget.NewCard(
 		"Traffic Overview",
 		"Connection counters and network load",
-		container.NewBorder(
-			nil,
-			nil,
-			nil,
-			nil,
-			container.NewVSplit(container.NewScroll(trafficSummary), connectionList),
-		),
+		trafficSplit,
 	)
 
-	centerTop := container.NewVBox(
-		buttonBar,
-		configDetailsCard,
+	centerColumn := container.NewVSplit(
+		container.NewPadded(buttonBar),
 		trafficCard,
+	)
+	centerColumn.Offset = 0.12
+
+	makeRegisterHeaderCell := func(title string, width float32) fyne.CanvasObject {
+		label := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		label.Wrapping = fyne.TextWrapOff
+		return container.New(layout.NewGridWrapLayout(fyne.NewSize(width, label.MinSize().Height+12)), container.NewPadded(label))
+	}
+
+	registerHeader := container.NewHBox(
+		makeRegisterHeaderCell(registerTableHeader(0), registerBlockColWidth),
+		makeRegisterHeaderCell(registerTableHeader(1), registerAddressColWidth),
+		makeRegisterHeaderCell(registerTableHeader(2), registerHexColWidth),
+		makeRegisterHeaderCell(registerTableHeader(3), registerValueColWidth),
+		makeRegisterHeaderCell(registerTableHeader(4), registerDescriptionColWidth),
 	)
 
 	registerCard := widget.NewCard(
 		"Register Map",
 		"Live register values and descriptions",
-		registerTable,
+		container.NewBorder(registerHeader, nil, nil, nil, registerTable),
 	)
 
-	upperSplit := container.NewHSplit(centerTop, registerCard)
-	upperSplit.Offset = 0.42
+	leftColumn := container.NewVSplit(leftPane, configDetailsCard)
+	leftColumn.Offset = 0.56
+
+	upperSplit := container.NewHSplit(centerColumn, registerCard)
+	upperSplit.Offset = 0.37
 
 	logsCard := widget.NewCard(
 		"Logs",
@@ -352,33 +401,51 @@ func main() {
 	)
 
 	rightDashboard := container.NewVSplit(upperSplit, logsCard)
-	rightDashboard.Offset = 0.62
+	rightDashboard.Offset = 0.72
 
-	dashboardSplit := container.NewHSplit(leftPane, rightDashboard)
-	dashboardSplit.Offset = 0.20
+	dashboardSplit := container.NewHSplit(leftColumn, rightDashboard)
+	dashboardSplit.Offset = 0.24
 
-	introductionText := widget.NewMultiLineEntry()
-	introductionText.Disable()
-	introductionText.Wrapping = fyne.TextWrapWord
-	introductionText.SetText(strings.TrimSpace(`
-Modbus TCP Simulator HMI
+	makeInfoHeading := func(text string) *widget.Label {
+		label := widget.NewLabel(text)
+		label.Wrapping = fyne.TextWrapWord
+		label.TextStyle = fyne.TextStyle{Bold: true}
+		return label
+	}
 
-This screen is intended as a single operator dashboard for the simulator.
+	makeInfoBody := func(text string) *widget.Label {
+		label := widget.NewLabel(text)
+		label.Wrapping = fyne.TextWrapWord
+		return label
+	}
 
-- Select a configuration on the left.
-- Start the selected mock server with the Start button.
-- Review network settings and profile details in the center.
-- Inspect the live register map on the right.
-- Watch logs and connection activity at the bottom.
-- Traffic overview shows bandwidth, message rate, and active client details.
+	linkedinURL, _ := url.Parse("https://www.linkedin.com/in/rjboer")
+	linkedinLink := widget.NewHyperlink("https://www.linkedin.com/in/rjboer", linkedinURL)
 
-The HMI is designed for engineering work: testing PLC communication, validating register mappings, and debugging client behavior without physical hardware.
-`))
+	introductionContent := container.NewVBox(
+		makeInfoHeading("Modbus TCP Simulator HMI"),
+		makeInfoBody("Please add me on LinkedIn. I do not ask payment for this software."),
+		makeInfoBody("This dashboard gives you one place to start a simulator, inspect runtime behavior, and diagnose Modbus TCP communication without needing the physical hardware on your desk."),
+		widget.NewSeparator(),
+		makeInfoHeading("What You Can Do Here"),
+		makeInfoBody("- Select a configuration.\n- Start or stop a simulated Modbus TCP server.\n- Inspect and edit live register values.\n- Monitor logs, active connections, and traffic rates."),
+		widget.NewSeparator(),
+		makeInfoHeading("Why This Is Useful"),
+		makeInfoBody("Use it for PLC development, register-map validation, unit-ID checks, traffic inspection, and debugging client polling behavior before real hardware is available."),
+		widget.NewSeparator(),
+		makeInfoHeading("Dashboard Areas"),
+		makeInfoBody("Configurations: choose the mock profile.\nConfig Details: review the selected profile.\nRegister Map: inspect and change live values.\nTraffic Overview: view throughput, message rate, and active connections.\nLogs: inspect requests, warnings, and shutdown activity."),
+		widget.NewSeparator(),
+		makeInfoHeading("Support"),
+		makeInfoBody("Please add me on LinkedIn."),
+		makeInfoBody("Roelof Jan Boer"),
+		linkedinLink,
+	)
 
 	introductionCard := widget.NewCard(
 		"Introduction",
 		"How to use the simulator dashboard",
-		introductionText,
+		container.NewScroll(introductionContent),
 	)
 
 	tabs := container.NewAppTabs(
@@ -428,6 +495,33 @@ The HMI is designed for engineering work: testing PLC communication, validating 
 		}
 	}()
 
+	if launchCount <= 2 && prefs.IntWithFallback(preferenceLinkedInPromptCount, 0) < 2 {
+		go func() {
+			time.Sleep(400 * time.Millisecond)
+			fyne.Do(func() {
+				var prompt dialog.Dialog
+				openButton := widget.NewButton("Open LinkedIn", func() {
+					prefs.SetInt(preferenceLinkedInPromptCount, prefs.IntWithFallback(preferenceLinkedInPromptCount, 0)+1)
+					prompt.Hide()
+					if err := ui.OpenURL(linkedinURL); err != nil {
+						dialog.ShowError(err, window)
+					}
+				})
+				openButton.Importance = widget.HighImportance
+				promptContent := container.NewVBox(
+					widget.NewLabel("I don't ask for payment. I just ask that you add me on LinkedIn."),
+					openButton,
+				)
+				prompt = dialog.NewCustomWithoutButtons(
+					"Support The Project",
+					promptContent,
+					window,
+				)
+				prompt.Show()
+			})
+		}()
+	}
+
 	window.ShowAndRun()
 	stopRefreshLoop()
 	_ = runtime.Stop()
@@ -439,6 +533,20 @@ func buildConfigRows(items []modbus.DiscoveredConfig) []string {
 		rows = append(rows, fmt.Sprintf("%s | %s | %s:%d", item.Config.Name, item.Config.DeviceType, item.Config.ListenAddress, item.Config.Port))
 	}
 	return rows
+}
+
+func registerValueColor(row registerRow) color.Color {
+	if row.IsBool {
+		if row.Value == "true" {
+			return color.NRGBA{R: 140, G: 210, B: 160, A: 255}
+		}
+		return color.NRGBA{R: 210, G: 140, B: 140, A: 255}
+	}
+	valueText := strings.TrimSpace(strings.Fields(row.Value)[0])
+	if value, err := strconv.ParseUint(valueText, 0, 64); err == nil && value == 0 {
+		return theme.Color(theme.ColorNameForeground)
+	}
+	return color.NRGBA{R: 145, G: 185, B: 235, A: 255}
 }
 
 type registerRow struct {
