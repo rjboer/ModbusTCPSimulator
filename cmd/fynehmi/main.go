@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
 	"image/color"
 	"io"
@@ -129,6 +130,19 @@ func main() {
 			text.Refresh()
 		},
 	)
+	registerTable.ShowHeaderRow = true
+	registerTable.ShowHeaderColumn = false
+	registerTable.CreateHeader = func() fyne.CanvasObject {
+		return widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	}
+	registerTable.UpdateHeader = func(id widget.TableCellID, obj fyne.CanvasObject) {
+		label := obj.(*widget.Label)
+		if id.Row == -1 {
+			label.SetText(registerTableHeader(id.Col))
+			return
+		}
+		label.SetText("")
+	}
 	registerTable.SetColumnWidth(0, registerBlockColWidth)
 	registerTable.SetColumnWidth(1, registerAddressColWidth)
 	registerTable.SetColumnWidth(2, registerHexColWidth)
@@ -368,24 +382,44 @@ func main() {
 	)
 	centerColumn.Offset = 0.12
 
-	makeRegisterHeaderCell := func(title string, width float32) fyne.CanvasObject {
-		label := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-		label.Wrapping = fyne.TextWrapOff
-		return container.New(layout.NewGridWrapLayout(fyne.NewSize(width, label.MinSize().Height+12)), container.NewPadded(label))
-	}
+	exportRegisterCSVButton := widget.NewButton("Export CSV", func() {
+		saveDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+			if err != nil {
+				dialog.ShowError(err, window)
+				return
+			}
+			if writer == nil {
+				return
+			}
+			defer writer.Close()
 
-	registerHeader := container.NewHBox(
-		makeRegisterHeaderCell(registerTableHeader(0), registerBlockColWidth),
-		makeRegisterHeaderCell(registerTableHeader(1), registerAddressColWidth),
-		makeRegisterHeaderCell(registerTableHeader(2), registerHexColWidth),
-		makeRegisterHeaderCell(registerTableHeader(3), registerValueColWidth),
-		makeRegisterHeaderCell(registerTableHeader(4), registerDescriptionColWidth),
-	)
+			csvWriter := csv.NewWriter(writer)
+			if err := csvWriter.Write([]string{"Block", "Address", "Hex", "Value", "Description"}); err != nil {
+				dialog.ShowError(err, window)
+				return
+			}
+			for _, row := range registerRows {
+				if err := csvWriter.Write([]string{row.Block, row.Address, row.Hex, row.Value, row.Description}); err != nil {
+					dialog.ShowError(err, window)
+					return
+				}
+			}
+			csvWriter.Flush()
+			if err := csvWriter.Error(); err != nil {
+				dialog.ShowError(err, window)
+				return
+			}
+			refreshStatus(fmt.Sprintf("Register map exported to %s", writer.URI().Path()))
+		}, window)
+		saveDialog.SetFileName("register-map.csv")
+		saveDialog.SetFilter(storage.NewExtensionFileFilter([]string{".csv"}))
+		saveDialog.Show()
+	})
 
 	registerCard := widget.NewCard(
 		"Register Map",
 		"Live register values and descriptions",
-		container.NewBorder(registerHeader, nil, nil, nil, registerTable),
+		container.NewBorder(container.NewHBox(layout.NewSpacer(), exportRegisterCSVButton), nil, nil, nil, registerTable),
 	)
 
 	leftColumn := container.NewVSplit(leftPane, configDetailsCard)
