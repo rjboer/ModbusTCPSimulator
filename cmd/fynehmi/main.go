@@ -29,6 +29,7 @@ func main() {
 	const (
 		preferenceLaunchCount         = "launch_count"
 		preferenceLinkedInPromptCount = "linkedin_prompt_count"
+		preferenceConfigRootOverride  = "config_root_override"
 	)
 
 	appRoot, err := app2.DetectProjectRoot()
@@ -37,17 +38,21 @@ func main() {
 	}
 	configRoot := app2.ConfigRoot(appRoot)
 
+	ui := app.NewWithID("rjboer.modbus-tcp-simulator.hmi")
+	prefs := ui.Preferences()
+	if overrideRoot := strings.TrimSpace(prefs.StringWithFallback(preferenceConfigRootOverride, "")); overrideRoot != "" {
+		configRoot = overrideRoot
+	}
+
 	runtime := app2.NewRuntime(configRoot)
 	discovery, err := runtime.Discover()
 	if err != nil {
 		panic(err)
 	}
 
-	ui := app.NewWithID("rjboer.modbus-tcp-simulator.hmi")
 	window := ui.NewWindow("Modbus TCP Simulator HMI")
 	window.Resize(fyne.NewSize(1400, 900))
 
-	prefs := ui.Preferences()
 	launchCount := prefs.IntWithFallback(preferenceLaunchCount, 0) + 1
 	prefs.SetInt(preferenceLaunchCount, launchCount)
 
@@ -60,6 +65,7 @@ func main() {
 	}
 
 	statusLabel := widget.NewLabel("Ready")
+	configRootLabel := widget.NewLabel(fmt.Sprintf("Config root: %s", configRoot))
 	configSummary := widget.NewTextGrid()
 	trafficSummary := widget.NewTextGrid()
 	logView := widget.NewTextGrid()
@@ -228,6 +234,10 @@ func main() {
 	updateSelectedConfig := func() {
 		if len(validConfigs) == 0 {
 			configSummary.SetText("No valid configs found.")
+			connectionRows = []string{"No active connections"}
+			connectionList.Refresh()
+			logView.SetText("")
+			trafficSummary.SetText("Server not running.")
 			registerRows = nil
 			registerTable.Refresh()
 			return
@@ -304,6 +314,55 @@ func main() {
 		refreshStatus(fmt.Sprintf("Discovered %d valid configs", len(validConfigs)))
 	})
 
+	selectFolderButton := widget.NewButton("Select Config Folder", func() {
+		folderDialog := dialog.NewFolderOpen(func(listable fyne.ListableURI, err error) {
+			if err != nil {
+				dialog.ShowError(err, window)
+				return
+			}
+			if listable == nil {
+				return
+			}
+			if runtime.Running() {
+				if err := runtime.Stop(); err != nil {
+					dialog.ShowError(err, window)
+					return
+				}
+			}
+
+			selectedRoot := listable.Path()
+			runtime.SetRoot(selectedRoot)
+			prefs.SetString(preferenceConfigRootOverride, selectedRoot)
+
+			discovery, err = runtime.Discover()
+			if err != nil {
+				dialog.ShowError(err, window)
+				return
+			}
+			configRoot = selectedRoot
+			configRootLabel.SetText(fmt.Sprintf("Config root: %s", configRoot))
+			validConfigs = discovery.Valid
+			configRows = buildConfigRows(validConfigs)
+			selectedIndex = 0
+			configList.UnselectAll()
+			configList.Refresh()
+			updateSelectedConfig()
+			updateServerControls(false)
+			refreshTelemetry()
+			if len(validConfigs) > 0 {
+				configList.Select(0)
+			}
+			refreshStatus(fmt.Sprintf("Loaded %d configs from %s", len(validConfigs), selectedRoot))
+		}, window)
+
+		if currentRoot := runtime.Root(); currentRoot != "" {
+			if uri, err := storage.ListerForURI(storage.NewFileURI(currentRoot)); err == nil {
+				folderDialog.SetLocation(uri)
+			}
+		}
+		folderDialog.Show()
+	})
+
 	startButton.OnTapped = func() {
 		if err := runtime.Start(); err != nil {
 			dialog.ShowError(err, window)
@@ -351,6 +410,7 @@ func main() {
 	leftPane := container.NewPadded(container.NewBorder(
 		container.NewVBox(
 			widget.NewLabel("Discovered Configurations"),
+			selectFolderButton,
 			refreshButton,
 		),
 		nil,
@@ -493,7 +553,7 @@ func main() {
 			statusLabel,
 			layout.NewSpacer(),
 			widget.NewLabel(fmt.Sprintf("App root: %s", appRoot)),
-			widget.NewLabel(fmt.Sprintf("Config root: %s", configRoot)),
+			configRootLabel,
 		),
 		nil,
 		nil,
