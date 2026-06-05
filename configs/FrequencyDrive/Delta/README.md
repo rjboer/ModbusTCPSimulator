@@ -26,9 +26,10 @@
 
 ## What Is Verified From Docs
 
-- `delta_ms300_drive_c.json` is grounded in the Modbus appendix of `Delta-MS-300-Series-Users-Manual.pdf`.
-- The command area `2000H` to `2002H` is represented in the holding-register block.
-- The monitor and display area from `2100H` through the documented `2234H` entries is represented in the input-register block.
+- `delta_ms300_drive_c.json` is grounded in the Modbus appendix of `Delta-MS-300-Series-Users-Manual.pdf` and refined with `register-map-corrected-monitoring.csv`.
+- The command area `2000H` to `2002H` is represented in the holding-register block with corrected descriptions from the local Delta material.
+- The monitor and display area from `2100H` through the documented `2234H` entries is represented in the input-register block with corrected descriptions from the local Delta material.
+- The corrected CSV also confirms the communication-related parameter addresses at `0014H`, `0015H`, `0900H` through `0957H`, and the `2000H` command decoding dependency on `Pr.09-30 = 0`.
 - The broader Delta product documentation confirms that the MS300 platform supports `MODBUS TCP` via communication card options.
 - This is the only profile that also has vendor-specific runtime synchronization in the Go code.
 
@@ -38,4 +39,4 @@
 - No Delta source in this pass provided a clean Modbus TCP default port statement for this simulator profile.
 - `data_bits`, `parity`, and `stop_bits` are metadata only in the current runtime and are not validated as active TCP settings.
 - Not every MS300 parameter family outside the documented command and monitor areas is modeled.
-- Some addresses inside the contiguous JSON span remain placeholders.
+- The communication-setup and Ethernet-option parameters from the corrected CSV are documented, but they are not exposed as a second sparse holding-register block because the current config schema only supports one contiguous block per register type.

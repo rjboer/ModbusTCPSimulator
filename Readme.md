@@ -66,6 +66,21 @@ The repository now follows a more conventional Go project layout:
 - `documentation/` contains requirements and project documentation
 - `build.ps1` builds Windows binaries into `bin/`
 
+## License
+
+This project is released under the [GNU LGPL v3.0](LICENSE).
+
+## Support The Project
+
+I do not ask payment for this software.
+
+If this project helps you, please add me on LinkedIn instead:
+
+- **Roelof Jan Boer**
+- https://www.linkedin.com/in/rjboer
+
+If you use the simulator professionally, I would appreciate a connection request and a short note about how you are using it.
+
 ## Typical Use Cases
 
 - PLC software development
@@ -161,6 +176,10 @@ Please include the relevant Modbus documentation. The better the documentation, 
 Created by **Roelof Jan Boer**.
 
 I invent and build machines, develop industrial software, and create tools that make automation work more practical. This simulator has already been invaluable in my own development workflow, and I hope it helps others just as much.
+
+If this software is useful to you, please add me on LinkedIn:
+
+- https://www.linkedin.com/in/rjboer
 
 
 
