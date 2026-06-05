@@ -37,6 +37,21 @@ func NewRuntime(root string) *Runtime {
 	}
 }
 
+func (r *Runtime) Root() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.root
+}
+
+func (r *Runtime) SetRoot(root string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.root = root
+	r.discovery = modbus.DiscoveryResult{}
+	r.selectedPath = ""
+	r.selectedCfg = modbus.Config{}
+}
+
 func (r *Runtime) Discover() (modbus.DiscoveryResult, error) {
 	discovery, err := modbus.DiscoverConfigs(r.root)
 	if err != nil {
