@@ -6,7 +6,8 @@ If you work with Modbus TCP, this project is built to become one of your most us
 
 I built this project while working on industrial control software and needed a reliable way to simulate Modbus TCP based drives during development. The result is a configurable digital twin style simulator that can stand in for real devices and make software development, debugging, and integration much faster.
 
-
+If you want to give it a spin, please find the latest release here:
+https://github.com/rjboer/ModbusTCPSimulator/releases
 
 <img width="3839" height="2255" alt="image" src="https://github.com/user-attachments/assets/c643dc01-fcea-4d34-9cf9-b9025f04274c" />
 
