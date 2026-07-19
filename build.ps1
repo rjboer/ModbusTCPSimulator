@@ -111,6 +111,9 @@ $resolvedCC = Resolve-MingwCompiler `
 
 $resolvedCXX = Resolve-CxxCompiler -RequestedPath $CXXPath -ResolvedCC $resolvedCC
 
+$env:GOOS = "windows"
+$env:GOARCH = "amd64"
+$env:GOAMD64 = "v1"
 $env:CGO_ENABLED = "1"
 $env:CC = $resolvedCC
 $env:CXX = $resolvedCXX
