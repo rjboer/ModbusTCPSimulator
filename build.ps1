@@ -10,6 +10,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Test-MingwCompiler {
+    param(
+        [string]$CompilerPath
+    )
+
+    if (-not (Test-Path -LiteralPath $CompilerPath -PathType Leaf)) {
+        return $false
+    }
+
+    $machine = & $CompilerPath -dumpmachine 2>$null
+    return $LASTEXITCODE -eq 0 -and $machine -match "^x86_64.*mingw"
+}
+
 function Resolve-MingwCompiler {
     param(
         [string]$RequestedPath,
@@ -17,27 +30,32 @@ function Resolve-MingwCompiler {
     )
 
     if ($RequestedPath) {
-        if (-not (Test-Path $RequestedPath)) {
+        if (-not (Test-Path -LiteralPath $RequestedPath -PathType Leaf)) {
             throw "Requested compiler not found: $RequestedPath"
         }
-        return (Resolve-Path $RequestedPath).Path
+
+        $resolvedRequestedPath = (Resolve-Path -LiteralPath $RequestedPath).Path
+        if (-not (Test-MingwCompiler -CompilerPath $resolvedRequestedPath)) {
+            throw "Requested compiler does not target 64-bit MinGW: $resolvedRequestedPath"
+        }
+        return $resolvedRequestedPath
     }
 
     foreach ($candidate in $CandidatePaths) {
-        if (Test-Path $candidate) {
-            return (Resolve-Path $candidate).Path
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            continue
+        }
+
+        $resolvedCandidate = (Resolve-Path -LiteralPath $candidate).Path
+        if (Test-MingwCompiler -CompilerPath $resolvedCandidate) {
+            return $resolvedCandidate
         }
     }
 
     $whereGcc = & where.exe gcc 2>$null
     foreach ($gcc in $whereGcc) {
-        if (-not (Test-Path $gcc)) {
-            continue
-        }
-
-        $machine = & $gcc -dumpmachine 2>$null
-        if ($LASTEXITCODE -eq 0 -and $machine -match "x86_64.*mingw") {
-            return $gcc
+        if (Test-MingwCompiler -CompilerPath $gcc) {
+            return (Resolve-Path -LiteralPath $gcc).Path
         }
     }
 
@@ -51,15 +69,20 @@ function Resolve-CxxCompiler {
     )
 
     if ($RequestedPath) {
-        if (-not (Test-Path $RequestedPath)) {
+        if (-not (Test-Path -LiteralPath $RequestedPath -PathType Leaf)) {
             throw "Requested C++ compiler not found: $RequestedPath"
         }
-        return (Resolve-Path $RequestedPath).Path
+
+        $resolvedRequestedPath = (Resolve-Path -LiteralPath $RequestedPath).Path
+        if (-not (Test-MingwCompiler -CompilerPath $resolvedRequestedPath)) {
+            throw "Requested C++ compiler does not target 64-bit MinGW: $resolvedRequestedPath"
+        }
+        return $resolvedRequestedPath
     }
 
     $candidate = $ResolvedCC -replace "gcc\.exe$", "g++.exe"
-    if (Test-Path $candidate) {
-        return (Resolve-Path $candidate).Path
+    if (Test-MingwCompiler -CompilerPath $candidate) {
+        return (Resolve-Path -LiteralPath $candidate).Path
     }
 
     throw "Could not infer g++.exe from $ResolvedCC. Pass -CXXPath explicitly."
@@ -81,9 +104,9 @@ function Invoke-GoBuild {
 $resolvedCC = Resolve-MingwCompiler `
     -RequestedPath $CCPath `
     -CandidatePaths @(
+        "C:\TDM-GCC-64\bin\gcc.exe",
         "C:\msys64\ucrt64\bin\gcc.exe",
-        "C:\msys64\mingw64\bin\gcc.exe",
-        "C:\TDM-GCC-64\bin\gcc.exe"
+        "C:\msys64\mingw64\bin\gcc.exe"
     )
 
 $resolvedCXX = Resolve-CxxCompiler -RequestedPath $CXXPath -ResolvedCC $resolvedCC
