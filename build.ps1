@@ -23,6 +23,27 @@ function Test-MingwCompiler {
     return $LASTEXITCODE -eq 0 -and $machine -match "^x86_64.*mingw"
 }
 
+function Get-BinutilsVersion {
+    param([string]$CompilerPath)
+
+    $compilerDir = Split-Path -Parent $CompilerPath
+    $ldPath = Join-Path $compilerDir "ld.exe"
+    if (-not (Test-Path -LiteralPath $ldPath -PathType Leaf)) {
+        throw "GNU linker was not found next to the compiler: $ldPath"
+    }
+
+    $firstLine = (& $ldPath --version 2>&1 | Select-Object -First 1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not determine the GNU linker version: $firstLine"
+    }
+    if ($firstLine -notmatch '([0-9]+)[.]([0-9]+)(?:[.]([0-9]+))?') {
+        throw "Could not parse GNU linker version: $firstLine"
+    }
+
+    $patch = if ($Matches[3]) { $Matches[3] } else { "0" }
+    return [version]"$($Matches[1]).$($Matches[2]).$patch"
+}
+
 function Resolve-MingwCompiler {
     param(
         [string]$RequestedPath,
@@ -104,9 +125,9 @@ function Invoke-GoBuild {
 $resolvedCC = Resolve-MingwCompiler `
     -RequestedPath $CCPath `
     -CandidatePaths @(
-        "C:\TDM-GCC-64\bin\gcc.exe",
         "C:\msys64\ucrt64\bin\gcc.exe",
-        "C:\msys64\mingw64\bin\gcc.exe"
+        "C:\msys64\mingw64\bin\gcc.exe",
+        "C:\TDM-GCC-64\bin\gcc.exe"
     )
 
 $resolvedCXX = Resolve-CxxCompiler -RequestedPath $CXXPath -ResolvedCC $resolvedCC
@@ -117,6 +138,16 @@ $env:GOAMD64 = "v1"
 $env:CGO_ENABLED = "1"
 $env:CC = $resolvedCC
 $env:CXX = $resolvedCXX
+$compilerBin = Split-Path -Parent $resolvedCC
+$env:PATH = "$compilerBin;$env:PATH"
+$binutilsVersion = Get-BinutilsVersion -CompilerPath $resolvedCC
+Write-Host "  Binutils = $binutilsVersion"
+if ($binutilsVersion -lt [version]"2.37.0") {
+    Write-Warning "Binutils $binutilsVersion is too old for default Go 1.25+ Windows cgo builds. Enabling GOEXPERIMENT=nodwarf5."
+    $env:GOEXPERIMENT = "nodwarf5"
+} else {
+    Remove-Item Env:GOEXPERIMENT -ErrorAction SilentlyContinue
+}
 
 $resolvedOutputDir = Join-Path (Get-Location) $OutputDir
 New-Item -ItemType Directory -Force -Path $resolvedOutputDir | Out-Null
