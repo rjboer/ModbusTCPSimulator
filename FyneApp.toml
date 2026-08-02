@@ -1,0 +1,6 @@
+[Details]
+Name = "Modbus TCP Simulator HMI"
+ID = "rjboer.modbus-tcp-simulator.hmi"
+
+[Migrations]
+fyneDo = true
