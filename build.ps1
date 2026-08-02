@@ -68,11 +68,16 @@ function Resolve-CxxCompiler {
 function Invoke-GoBuild {
     param(
         [string]$Package,
-        [string]$Output
+        [string]$Output,
+        [string]$LdFlags = ""
     )
 
     Write-Host "Building $Package -> $Output"
-    & go build -o $Output $Package
+    if ([string]::IsNullOrWhiteSpace($LdFlags)) {
+        & go build -o $Output $Package
+    } else {
+        & go build -tags migrated_fynedo -ldflags $LdFlags -o $Output $Package
+    }
     if ($LASTEXITCODE -ne 0) {
         throw "go build failed for $Package"
     }
@@ -103,13 +108,13 @@ Write-Host ""
 
 switch ($Target) {
     "fynehmi" {
-        Invoke-GoBuild -Package "./cmd/fynehmi" -Output (Join-Path $resolvedOutputDir "fynehmi.exe")
+        Invoke-GoBuild -Package "./cmd/fynehmi" -Output (Join-Path $resolvedOutputDir "fynehmi.exe") -LdFlags "-s -w -H=windowsgui"
     }
     "mockserver" {
         Invoke-GoBuild -Package "./cmd/mockserver" -Output (Join-Path $resolvedOutputDir "mockserver.exe")
     }
     "all" {
-        Invoke-GoBuild -Package "./cmd/fynehmi" -Output (Join-Path $resolvedOutputDir "fynehmi.exe")
+        Invoke-GoBuild -Package "./cmd/fynehmi" -Output (Join-Path $resolvedOutputDir "fynehmi.exe") -LdFlags "-s -w -H=windowsgui"
         Invoke-GoBuild -Package "./cmd/mockserver" -Output (Join-Path $resolvedOutputDir "mockserver.exe")
     }
 }
