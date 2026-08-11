@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - development
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: windows-2025
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Set up UCRT64 compiler
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: mingw-w64-ucrt-x86_64-gcc
+
+      - name: Test all packages
+        shell: pwsh
+        run: |
+          $compilerRoot = "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin"
+          .\test.ps1 -CCPath "$compilerRoot\gcc.exe" -CXXPath "$compilerRoot\g++.exe"
+
+      - name: Build Windows bundle
+        shell: pwsh
+        run: |
+          $compilerRoot = "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin"
+          .\build.ps1 -Target all -Bundle -CCPath "$compilerRoot\gcc.exe" -CXXPath "$compilerRoot\g++.exe" -Version "ci-${{ github.sha }}"
+
+      - name: Upload Windows bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: modbus-tcp-simulator-windows-amd64
+          path: dist/modbus-tcp-simulator-windows
+          retention-days: 14
+          if-no-files-found: error

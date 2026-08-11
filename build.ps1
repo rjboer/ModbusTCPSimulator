@@ -5,7 +5,8 @@ param(
     [switch]$Bundle,
     [string]$BundleDir = "dist\modbus-tcp-simulator-windows",
     [string]$CCPath = "",
-    [string]$CXXPath = ""
+    [string]$CXXPath = "",
+    [string]$Version = "dev"
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,8 +33,10 @@ function Get-BinutilsVersion {
         throw "GNU linker was not found next to the compiler: $ldPath"
     }
 
-    $firstLine = (& $ldPath --version 2>&1 | Select-Object -First 1)
-    if ($LASTEXITCODE -ne 0) {
+    $versionOutput = @(& $ldPath --version 2>&1)
+    $exitCode = $LASTEXITCODE
+    $firstLine = [string]$versionOutput[0]
+    if ($exitCode -ne 0) {
         throw "Could not determine the GNU linker version: $firstLine"
     }
     if ($firstLine -notmatch '([0-9]+)[.]([0-9]+)(?:[.]([0-9]+))?') {
@@ -112,11 +115,12 @@ function Resolve-CxxCompiler {
 function Invoke-GoBuild {
     param(
         [string]$Package,
-        [string]$Output
+        [string]$Output,
+        [string]$LdFlags
     )
 
     Write-Host "Building $Package -> $Output"
-    & go build -o $Output $Package
+    & go build -mod=readonly -ldflags $LdFlags -o $Output $Package
     if ($LASTEXITCODE -ne 0) {
         throw "go build failed for $Package"
     }
@@ -160,14 +164,14 @@ Write-Host ""
 
 switch ($Target) {
     "fynehmi" {
-        Invoke-GoBuild -Package "./cmd/fynehmi" -Output (Join-Path $resolvedOutputDir "fynehmi.exe")
+        Invoke-GoBuild -Package "./cmd/fynehmi" -Output (Join-Path $resolvedOutputDir "modbus-tcp-simulator.exe") -LdFlags "-s -w -H=windowsgui -X main.appVersion=$Version"
     }
     "mockserver" {
-        Invoke-GoBuild -Package "./cmd/mockserver" -Output (Join-Path $resolvedOutputDir "mockserver.exe")
+        Invoke-GoBuild -Package "./cmd/mockserver" -Output (Join-Path $resolvedOutputDir "mockserver.exe") -LdFlags "-s -w"
     }
     "all" {
-        Invoke-GoBuild -Package "./cmd/fynehmi" -Output (Join-Path $resolvedOutputDir "fynehmi.exe")
-        Invoke-GoBuild -Package "./cmd/mockserver" -Output (Join-Path $resolvedOutputDir "mockserver.exe")
+        Invoke-GoBuild -Package "./cmd/fynehmi" -Output (Join-Path $resolvedOutputDir "modbus-tcp-simulator.exe") -LdFlags "-s -w -H=windowsgui -X main.appVersion=$Version"
+        Invoke-GoBuild -Package "./cmd/mockserver" -Output (Join-Path $resolvedOutputDir "mockserver.exe") -LdFlags "-s -w"
     }
 }
 
@@ -176,13 +180,15 @@ if ($Bundle) {
     New-Item -ItemType Directory -Force -Path $resolvedBundleDir | Out-Null
 
     if ($Target -eq "fynehmi" -or $Target -eq "all") {
-        Copy-Item -LiteralPath (Join-Path $resolvedOutputDir "fynehmi.exe") -Destination $resolvedBundleDir -Force
+        Copy-Item -LiteralPath (Join-Path $resolvedOutputDir "modbus-tcp-simulator.exe") -Destination $resolvedBundleDir -Force
     }
     if ($Target -eq "mockserver" -or $Target -eq "all") {
         Copy-Item -LiteralPath (Join-Path $resolvedOutputDir "mockserver.exe") -Destination $resolvedBundleDir -Force
     }
 
-    Copy-Item -Recurse -LiteralPath (Join-Path (Get-Location) "configs") -Destination (Join-Path $resolvedBundleDir "configs") -Force
+    $bundleConfigDir = Join-Path $resolvedBundleDir "configs"
+    New-Item -ItemType Directory -Force -Path $bundleConfigDir | Out-Null
+    Copy-Item -Recurse -Path (Join-Path (Get-Location) "configs\*") -Destination $bundleConfigDir -Force
     if (Test-Path (Join-Path (Get-Location) "Readme.md")) {
         Copy-Item -LiteralPath (Join-Path (Get-Location) "Readme.md") -Destination $resolvedBundleDir -Force
     }

@@ -70,7 +70,9 @@ The repository now follows a more conventional Go project layout:
 - `internal/app` contains shared application/runtime glue for the HMI
 - `configs/` contains device JSON configurations and related notes
 - `documentation/` contains requirements and project documentation
-- `build.ps1` builds Windows binaries into `bin/`
+- `test.ps1` runs the Windows/cgo test suite with an explicit 64-bit MinGW toolchain
+- `build.ps1` builds versioned Windows binaries into `bin/` and can create a distributable bundle
+- `.github/workflows` contains the CI and stable-tag release automation
 
 ## License
 
@@ -109,7 +111,7 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Target all
 Run the GUI:
 
 ```powershell
-.\bin\fynehmi.exe
+.\bin\modbus-tcp-simulator.exe
 ```
 
 Run the CLI:
@@ -124,6 +126,26 @@ During runtime, you can:
 2. Export the log
 3. Inspect the register map
 4. Exit the simulator
+
+## Updates and Releases
+
+The HMI checks the latest stable GitHub Release automatically at startup. You can
+also run a manual check from **Help → Check for Updates…**. An update is offered
+only when the release contains `modbus-tcp-simulator.exe` and `SHA256SUMS.txt`.
+The downloaded executable is checksum-verified and installed after the running
+application closes; the previous executable remains beside it as
+`modbus-tcp-simulator.exe.previous`.
+
+The Windows build flow follows the same explicit-toolchain pattern as OMRON-MCP:
+
+```powershell
+.\test.ps1 -CCPath "C:\TDM-GCC-64\bin\gcc.exe" -CXXPath "C:\TDM-GCC-64\bin\g++.exe"
+.\build.ps1 -Target all -Bundle -CCPath "C:\TDM-GCC-64\bin\gcc.exe" -CXXPath "C:\TDM-GCC-64\bin\g++.exe" -Version "v1.2.3"
+```
+
+GitHub Actions tests and builds pull requests and pushes to `main` or
+`development`. Pushing a stable tag such as `v1.2.3` publishes the GUI,
+CLI server, config bundle, and `SHA256SUMS.txt` as GitHub Release assets.
 
 Example runtime menu:
 Step 1:
