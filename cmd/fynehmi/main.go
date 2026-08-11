@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"image/color"
 	"io"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,9 +25,28 @@ import (
 
 	app2 "modbustcpipserver/internal/app"
 	"modbustcpipserver/internal/modbus"
+	"modbustcpipserver/internal/updater"
+)
+
+var (
+	updateSource = flag.String("apply-update", "", "Internal updater source path")
+	updateTarget = flag.String("update-target", "", "Internal updater target path")
 )
 
 func main() {
+	flag.Parse()
+	if *updateSource != "" || *updateTarget != "" {
+		if *updateSource == "" || *updateTarget == "" {
+			fmt.Fprintln(os.Stderr, "both -apply-update and -update-target are required")
+			os.Exit(2)
+		}
+		if err := updater.Apply(*updateSource, *updateTarget); err != nil {
+			fmt.Fprintln(os.Stderr, "update error:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	const (
 		preferenceLaunchCount         = "launch_count"
 		preferenceLinkedInPromptCount = "linkedin_prompt_count"
@@ -52,6 +73,12 @@ func main() {
 
 	window := ui.NewWindow("Modbus TCP Simulator HMI")
 	window.Resize(fyne.NewSize(1400, 900))
+	executable, _ := os.Executable()
+	window.SetMainMenu(fyne.NewMainMenu(
+		fyne.NewMenu("Help",
+			fyne.NewMenuItem("Check for Updates…", func() { showManualUpdateDialog(window, executable) }),
+		),
+	))
 
 	launchCount := prefs.IntWithFallback(preferenceLaunchCount, 0) + 1
 	prefs.SetInt(preferenceLaunchCount, launchCount)
@@ -616,6 +643,7 @@ func main() {
 		}()
 	}
 
+	go checkForUpdatesOnStartup(window, executable)
 	window.ShowAndRun()
 	stopRefreshLoop()
 	_ = runtime.Stop()
